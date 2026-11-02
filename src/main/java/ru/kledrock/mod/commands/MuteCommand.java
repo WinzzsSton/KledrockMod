@@ -1,6 +1,7 @@
 package ru.kledrock.mod.commands;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Sound;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -55,7 +56,7 @@ public class MuteCommand implements CommandExecutor {
 
         if (target != null) target.sendMessage("§cВы были замучены. Причина: " + reason);
         
-        MessageUtil.broadcastModeration("ЗАМУТИЛ", targetName, durationStr, reason, sender.getName());
+        MessageUtil.broadcastModeration("ЗАМУТИЛ", targetName, durationStr, reason, sender.getName(), Sound.BLOCK_ANVIL_LAND);
         return true;
     }
 }

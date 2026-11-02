@@ -1,6 +1,7 @@
 package ru.kledrock.mod.commands;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Sound;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -57,7 +58,7 @@ public class BanCommand implements CommandExecutor {
             target.kickPlayer("§cВы были забанены.\n§eПричина: " + reason);
         }
 
-        MessageUtil.broadcastModeration("ЗАБАНИЛ", targetName, durationStr, reason, sender.getName());
+        MessageUtil.broadcastModeration("ЗАБАНИЛ", targetName, durationStr, reason, sender.getName(), Sound.ENTITY_ENDER_DRAGON_GROWL);
         return true;
     }
 }

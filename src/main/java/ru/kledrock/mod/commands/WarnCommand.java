@@ -1,6 +1,7 @@
 package ru.kledrock.mod.commands;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Sound;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -36,7 +37,7 @@ public class WarnCommand implements CommandExecutor {
 
         if (target != null) target.sendMessage("§cВы получили предупреждение. Причина: " + reason);
 
-        MessageUtil.broadcastSimple("ПРЕДУПРЕДИЛ", targetName, reason, sender.getName());
+        MessageUtil.broadcastSimple("ПРЕДУПРЕДИЛ", targetName, reason, sender.getName(), Sound.ENTITY_VILLAGER_NO);
 
         int activeWarns = plugin.getDatabaseManager().getActiveWarns(targetName);
         int threshold = plugin.getConfig().getInt("warns.ban-threshold", 3);
@@ -47,7 +48,7 @@ public class WarnCommand implements CommandExecutor {
             
             plugin.getDatabaseManager().addPunishment(targetName, "BAN", "Авто-бан: " + threshold + " предупреждения", "Система", banDurationMillis);
             
-            MessageUtil.broadcastModeration("ЗАБАНИЛ", targetName, banDurationHours + "Ч", "Достигнут лимит варнов", "Система");
+            MessageUtil.broadcastModeration("ЗАБАНИЛ", targetName, banDurationHours + "Ч", "Достигнут лимит варнов", "Система", Sound.ENTITY_ENDER_DRAGON_GROWL);
             
             if (target != null) {
                 target.kickPlayer("§cВы автоматически забанены за " + threshold + " предупреждения.\n§eСрок: " + banDurationHours + "ч.");

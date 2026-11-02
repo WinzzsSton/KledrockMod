@@ -1,6 +1,7 @@
 package ru.kledrock.mod.commands;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Sound;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -39,7 +40,7 @@ public class KickCommand implements CommandExecutor {
         plugin.getDatabaseManager().addPunishment(target.getName(), "KICK", reason, sender.getName(), 0);
         target.kickPlayer("§cВы были кикнуты.\n§eПричина: " + reason);
         
-        MessageUtil.broadcastSimple("КИКНУЛ", target.getName(), reason, sender.getName());
+        MessageUtil.broadcastSimple("КИКНУЛ", target.getName(), reason, sender.getName(), Sound.ENTITY_ITEM_BREAK);
         return true;
     }
 }
