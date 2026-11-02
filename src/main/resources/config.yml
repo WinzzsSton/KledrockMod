@@ -1,0 +1,8 @@
+api:
+  enabled: true
+  port: 8080
+  secret-key: "kledrock_super_secret_key_2026_x89f"
+
+warns:
+  ban-threshold: 3
+  ban-duration: 24

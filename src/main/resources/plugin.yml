@@ -1,0 +1,36 @@
+name: KledrockMod
+version: 1.0.0
+main: ru.kledrock.mod.KledrockMod
+api-version: '1.21'
+author: Kledrock
+description: Full moderation plugin with Discord integration.
+
+commands:
+  ban:
+    description: Забанить игрока
+    usage: /ban <ник> [время] [причина]
+  unban:
+    description: Разбанить игрока
+    usage: /unban <ник>
+  mute:
+    description: Замутить игрока
+    usage: /mute <ник> [время] [причина]
+  unmute:
+    description: Размутить игрока
+    usage: /unmute <ник>
+  warn:
+    description: Выдать предупреждение
+    usage: /warn <ник> [причина]
+  kick:
+    description: Кикнуть игрока
+    usage: /kick <ник> [причина]
+
+permissions:
+  kledrockmod.ban:
+    default: op
+  kledrockmod.mute:
+    default: op
+  kledrockmod.warn:
+    default: op
+  kledrockmod.kick:
+    default: op

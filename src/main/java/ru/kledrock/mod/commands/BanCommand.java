@@ -1,0 +1,63 @@
+package ru.kledrock.mod.commands;
+
+import org.bukkit.Bukkit;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+import ru.kledrock.mod.KledrockMod;
+import ru.kledrock.mod.utils.MessageUtil;
+
+import java.util.Arrays;
+
+public class BanCommand implements CommandExecutor {
+    private final KledrockMod plugin;
+
+    public BanCommand(KledrockMod plugin) {
+        this.plugin = plugin;
+    }
+
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!sender.hasPermission("kledrockmod.ban")) {
+            sender.sendMessage("§cУ вас нет прав.");
+            return true;
+        }
+        if (args.length < 1) {
+            sender.sendMessage("§cИспользование: /ban <ник> [время] [причина]");
+            return true;
+        }
+
+        String targetName = args[0];
+        Player target = Bukkit.getPlayer(targetName);
+        long duration = 0;
+        String durationStr = "НАВСЕГДА";
+        String reason = "Не указана";
+
+        if (args.length >= 2) {
+            String timeStr = args[1].toLowerCase();
+            try {
+                if (timeStr.endsWith("h")) {
+                    duration = Long.parseLong(timeStr.replace("h", "")) * 3600000L;
+                    durationStr = timeStr.toUpperCase();
+                } else if (timeStr.endsWith("m")) {
+                    duration = Long.parseLong(timeStr.replace("m", "")) * 60000L;
+                    durationStr = timeStr.toUpperCase();
+                }
+            } catch (NumberFormatException ignored) {}
+        }
+        
+        if (args.length >= 3) {
+            reason = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
+        }
+
+        plugin.getDatabaseManager().addPunishment(targetName, "BAN", reason, sender.getName(), duration);
+
+        if (target != null) {
+            target.kickPlayer("§cВы были забанены.\n§eПричина: " + reason);
+        }
+
+        MessageUtil.broadcastModeration("ЗАБАНИЛ", targetName, durationStr, reason, sender.getName());
+        return true;
+    }
+}
