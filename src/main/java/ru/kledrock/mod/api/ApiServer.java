@@ -1,17 +1,21 @@
 package ru.kledrock.mod.api;
 
+import com.google.gson.Gson;
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpExchange;
+import org.bukkit.Bukkit;
 import ru.kledrock.mod.KledrockMod;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ApiServer {
     private final KledrockMod plugin;
+    private final Gson gson = new Gson();
     private HttpServer server;
 
     public ApiServer(KledrockMod plugin) {
@@ -23,7 +27,9 @@ public class ApiServer {
         try {
             server = HttpServer.create(new InetSocketAddress(port), 0);
             server.createContext("/api/ping", this::handlePing);
+            server.createContext("/api/stats", this::handleStats);
             server.createContext("/api/appeal", this::handleAppeal);
+            server.createContext("/api/appeal/action", this::handleAppealAction);
             server.setExecutor(null);
             server.start();
             plugin.getLogger().info("HTTP API запущен на порту " + port);
@@ -34,71 +40,75 @@ public class ApiServer {
 
     private boolean isAuthorized(HttpExchange exchange) {
         String providedKey = exchange.getRequestHeaders().getFirst("X-Kledrock-Key");
-        String expectedKey = plugin.getConfig().getString("api.secret-key");
-        return providedKey != null && providedKey.equals(expectedKey);
+        return providedKey != null && providedKey.equals(plugin.getConfig().getString("api.secret-key"));
     }
 
     private void handlePing(HttpExchange exchange) throws IOException {
-        if (!isAuthorized(exchange)) {
-            sendResponse(exchange, 401, "{\"error\":\"Unauthorized\"}");
-            return;
-        }
+        if (!isAuthorized(exchange)) { sendResponse(exchange, 401, "{\"error\":\"Unauthorized\"}"); return; }
         sendResponse(exchange, 200, "{\"status\":\"ok\"}");
     }
 
+    private void handleStats(HttpExchange exchange) throws IOException {
+        if (!isAuthorized(exchange)) { sendResponse(exchange, 401, "{\"error\":\"Unauthorized\"}"); return; }
+
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("tps", Bukkit.getTPS()[0]);
+        stats.put("online", Bukkit.getOnlinePlayers().size());
+        stats.put("deathsToday", plugin.getDatabaseManager().getTodayStat("deaths"));
+        stats.put("joinsToday", plugin.getDatabaseManager().getTodayStat("joins"));
+
+        sendResponse(exchange, 200, gson.toJson(stats));
+    }
+
     private void handleAppeal(HttpExchange exchange) throws IOException {
-        if (!isAuthorized(exchange)) {
-            sendResponse(exchange, 401, "{\"error\":\"Unauthorized\"}");
-            return;
-        }
-
-        if (!exchange.getRequestMethod().equalsIgnoreCase("POST")) {
-            sendResponse(exchange, 405, "{\"error\":\"Method Not Allowed\"}");
-            return;
-        }
-
-        InputStream is = exchange.getRequestBody();
-        String body = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        if (!isAuthorized(exchange)) { sendResponse(exchange, 401, "{\"error\":\"Unauthorized\"}"); return; }
+        if (!exchange.getRequestMethod().equalsIgnoreCase("POST")) { sendResponse(exchange, 405, "{}"); return; }
 
         try {
-            String punishmentIdStr = extractJsonValue(body, "punishmentId");
-            String discordUserId = extractJsonValue(body, "discordUserId");
-            String text = extractJsonValue(body, "text");
+            String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            Map<?, ?> map = gson.fromJson(body, Map.class);
+            
+            int punishmentId = Integer.parseInt(map.get("punishmentId").toString());
+            String discordUserId = map.get("discordUserId").toString();
+            String text = map.get("text").toString();
 
-            if (punishmentIdStr != null && discordUserId != null && text != null) {
-                int punishmentId = Integer.parseInt(punishmentIdStr);
-                plugin.getDatabaseManager().addAppeal(punishmentId, discordUserId, text);
-                sendResponse(exchange, 200, "{\"status\":\"success\"}");
+            int appealId = plugin.getDatabaseManager().addAppeal(punishmentId, discordUserId, text);
+            
+            if (appealId != -1) {
+                sendResponse(exchange, 200, "{\"status\":\"success\",\"appealId\":" + appealId + "}");
             } else {
-                sendResponse(exchange, 400, "{\"error\":\"Bad Request\"}");
+                sendResponse(exchange, 500, "{}");
             }
         } catch (Exception e) {
-            sendResponse(exchange, 500, "{\"error\":\"Internal Server Error\"}");
+            sendResponse(exchange, 400, "{}");
         }
     }
 
-    private String extractJsonValue(String json, String key) {
-        String searchKey = "\"" + key + "\":\"";
-        int start = json.indexOf(searchKey);
-        if (start == -1) return null;
-        start += searchKey.length();
-        int end = json.indexOf("\"", start);
-        if (end == -1) return null;
-        return json.substring(start, end);
+    private void handleAppealAction(HttpExchange exchange) throws IOException {
+        if (!isAuthorized(exchange)) { sendResponse(exchange, 401, "{\"error\":\"Unauthorized\"}"); return; }
+        if (!exchange.getRequestMethod().equalsIgnoreCase("POST")) { sendResponse(exchange, 405, "{}"); return; }
+
+        try {
+            String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            Map<?, ?> map = gson.fromJson(body, Map.class);
+            
+            int appealId = Integer.parseInt(map.get("appealId").toString());
+            String action = map.get("action").toString();
+
+            boolean success = plugin.getDatabaseManager().processAppeal(appealId, action);
+            if (success) sendResponse(exchange, 200, "{\"status\":\"success\"}");
+            else sendResponse(exchange, 400, "{}");
+        } catch (Exception e) {
+            sendResponse(exchange, 500, "{}");
+        }
     }
 
     private void sendResponse(HttpExchange exchange, int statusCode, String response) throws IOException {
         byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "application/json");
         exchange.sendResponseHeaders(statusCode, bytes.length);
-        try (OutputStream os = exchange.getResponseBody()) {
-            os.write(bytes);
-        }
+        try (OutputStream os = exchange.getResponseBody()) { os.write(bytes); }
     }
 
-    public void stop() {
-        if (server != null) {
-            server.stop(0);
-        }
-    }
+    public void stop() { if (server != null) server.stop(0); }
 }

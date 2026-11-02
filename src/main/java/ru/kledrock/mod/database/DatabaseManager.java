@@ -3,6 +3,8 @@ package ru.kledrock.mod.database;
 import org.bukkit.plugin.java.JavaPlugin;
 import java.io.File;
 import java.sql.*;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class DatabaseManager {
     private final JavaPlugin plugin;
@@ -29,7 +31,6 @@ public class DatabaseManager {
                         "time BIGINT," +
                         "active BOOLEAN DEFAULT 1" +
                         ");");
-                
                 stmt.execute("CREATE TABLE IF NOT EXISTS appeals (" +
                         "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                         "punishment_id INTEGER," +
@@ -38,11 +39,48 @@ public class DatabaseManager {
                         "status VARCHAR(16) DEFAULT 'PENDING'," +
                         "created_at BIGINT" +
                         ");");
+                stmt.execute("CREATE TABLE IF NOT EXISTS player_stats (" +
+                        "date VARCHAR(16) PRIMARY KEY," +
+                        "deaths INTEGER DEFAULT 0," +
+                        "joins INTEGER DEFAULT 0" +
+                        ");");
             }
             plugin.getLogger().info("База данных SQLite подключена.");
         } catch (SQLException e) {
             plugin.getLogger().severe("Ошибка подключения к БД: " + e.getMessage());
         }
+    }
+
+    private String getTodayDate() {
+        return new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+    }
+
+    public void addStat(String column) {
+        String today = getTodayDate();
+        try (PreparedStatement ps = connection.prepareStatement(
+                "INSERT INTO player_stats (date) VALUES (?) ON CONFLICT(date) DO NOTHING")) {
+            ps.setString(1, today);
+            ps.executeUpdate();
+        } catch (SQLException ignored) {}
+
+        try (PreparedStatement ps = connection.prepareStatement(
+                "UPDATE player_stats SET " + column + " = " + column + " + 1 WHERE date = ?")) {
+            ps.setString(1, today);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public int getTodayStat(String column) {
+        try (PreparedStatement ps = connection.prepareStatement("SELECT " + column + " FROM player_stats WHERE date = ?")) {
+            ps.setString(1, getTodayDate());
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) return rs.getInt(1);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0;
     }
 
     public void addPunishment(String playerName, String type, String reason, String issuer, long durationMillis) {
@@ -59,16 +97,49 @@ public class DatabaseManager {
         }
     }
 
-    public void addAppeal(int punishmentId, String discordUserId, String text) {
+    public int addAppeal(int punishmentId, String discordUserId, String text) {
         try (PreparedStatement ps = connection.prepareStatement(
-                "INSERT INTO appeals (punishment_id, discord_user_id, text, created_at) VALUES (?, ?, ?, ?)")) {
+                "INSERT INTO appeals (punishment_id, discord_user_id, text, created_at) VALUES (?, ?, ?, ?)",
+                Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, punishmentId);
             ps.setString(2, discordUserId);
             ps.setString(3, text);
             ps.setLong(4, System.currentTimeMillis());
             ps.executeUpdate();
+            ResultSet rs = ps.getGeneratedKeys();
+            if (rs.next()) return rs.getInt(1);
         } catch (SQLException e) {
             plugin.getLogger().severe("Ошибка записи апелляции: " + e.getMessage());
+        }
+        return -1;
+    }
+
+    public boolean processAppeal(int appealId, String action) {
+        try {
+            int punishmentId = -1;
+            try (PreparedStatement ps = connection.prepareStatement("SELECT punishment_id FROM appeals WHERE id = ? AND status = 'PENDING'")) {
+                ps.setInt(1, appealId);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) punishmentId = rs.getInt("punishment_id");
+            }
+
+            if (punishmentId == -1) return false;
+
+            if (action.equals("ACCEPT")) {
+                try (PreparedStatement ps = connection.prepareStatement("UPDATE punishments SET active = 0 WHERE id = ?")) {
+                    ps.setInt(1, punishmentId);
+                    ps.executeUpdate();
+                }
+            }
+
+            try (PreparedStatement ps = connection.prepareStatement("UPDATE appeals SET status = ? WHERE id = ?")) {
+                ps.setString(1, action);
+                ps.setInt(2, appealId);
+                ps.executeUpdate();
+            }
+            return true;
+        } catch (SQLException e) {
+            return false;
         }
     }
 
@@ -84,13 +155,8 @@ public class DatabaseManager {
         return 0;
     }
 
-    public boolean isMuted(String playerName) {
-        return isPunished(playerName, "MUTE");
-    }
-
-    public boolean isBanned(String playerName) {
-        return isPunished(playerName, "BAN");
-    }
+    public boolean isMuted(String playerName) { return isPunished(playerName, "MUTE"); }
+    public boolean isBanned(String playerName) { return isPunished(playerName, "BAN"); }
 
     private boolean isPunished(String playerName, String type) {
         try (PreparedStatement ps = connection.prepareStatement(
