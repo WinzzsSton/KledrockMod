@@ -19,12 +19,11 @@ public class KledrockMod extends JavaPlugin {
         databaseManager.init();
 
         getCommand("ban").setExecutor(new BanCommand(this));
+        getCommand("unban").setExecutor(new UnbanCommand(this));
         getCommand("mute").setExecutor(new MuteCommand(this));
+        getCommand("unmute").setExecutor(new UnmuteCommand(this));
         getCommand("warn").setExecutor(new WarnCommand(this));
         getCommand("kick").setExecutor(new KickCommand(this));
-        
-        getCommand("unban").setExecutor(new UnbanCommand(this));
-        getCommand("unmute").setExecutor(new UnmuteCommand(this));
 
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
 
